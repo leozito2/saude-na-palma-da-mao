@@ -128,7 +128,19 @@ export default function ProfilePage() {
     setMessage("")
 
     try {
-      console.log("[v0] Updating user profile")
+      console.log("[v0] Updating user profile for userId:", user?.id)
+      console.log("[v0] Form data being sent:", {
+        nome_completo: formData.nome_completo,
+        email: formData.email,
+        telefone: formData.telefone.replace(/\D/g, ""),
+        endereco_rua: formData.endereco_rua,
+        endereco_numero: formData.endereco_numero,
+        endereco_complemento: formData.endereco_complemento,
+        endereco_bairro: formData.endereco_bairro,
+        endereco_cidade: formData.endereco_cidade,
+        endereco_estado: formData.endereco_estado,
+        endereco_cep: formData.endereco_cep.replace(/\D/g, ""),
+      })
 
       const response = await fetch("/api/user/profile", {
         method: "PUT",
@@ -148,15 +160,21 @@ export default function ProfilePage() {
         }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        console.log("[v0] Profile updated successfully")
-        setMessage("Perfil atualizado com sucesso!")
+        console.log("[v0] Profile updated successfully:", data)
+        setMessage("✅ Perfil atualizado com sucesso!")
+        setTimeout(() => {
+          loadUserProfile()
+        }, 1000)
       } else {
-        throw new Error("Failed to update profile")
+        console.error("[v0] Error response:", data)
+        throw new Error(data.error || "Failed to update profile")
       }
     } catch (error) {
       console.error("[v0] Error updating profile:", error)
-      setMessage("Erro ao atualizar perfil. Tente novamente.")
+      setMessage("❌ Erro ao atualizar perfil. Tente novamente.")
     } finally {
       setIsLoading(false)
     }

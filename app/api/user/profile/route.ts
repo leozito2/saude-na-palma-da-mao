@@ -59,8 +59,20 @@ export async function PUT(request: Request) {
     }
 
     console.log("[v0] Updating user profile for userId:", userId)
+    console.log("[v0] Update data:", {
+      nome_completo,
+      email,
+      telefone,
+      endereco_rua,
+      endereco_numero,
+      endereco_complemento,
+      endereco_bairro,
+      endereco_cidade,
+      endereco_estado,
+      endereco_cep,
+    })
 
-    await sql`
+    const result = await sql`
       UPDATE users 
       SET 
         nome_completo = ${nome_completo},
@@ -75,10 +87,11 @@ export async function PUT(request: Request) {
         endereco_cep = ${endereco_cep || null},
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ${userId}
+      RETURNING id, nome_completo, email
     `
 
-    console.log("[v0] User profile updated successfully")
-    return NextResponse.json({ success: true })
+    console.log("[v0] User profile updated successfully:", result[0])
+    return NextResponse.json({ success: true, user: result[0] })
   } catch (error) {
     console.error("[v0] Error updating user profile:", error)
     return NextResponse.json({ error: "Failed to update user profile" }, { status: 500 })

@@ -84,21 +84,43 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: "ID and User ID are required" }, { status: 400 })
     }
 
-    const result = await sql`
-      UPDATE appointments 
-      SET 
-        tipo_consulta = ${tipo_consulta},
-        nome_medico = ${nome_medico},
-        especialidade = ${especialidade},
-        data_consulta = ${data_consulta},
-        horario_consulta = ${horario_consulta},
-        local_consulta = ${local_consulta},
-        observacoes = ${observacoes || ""},
-        status = ${status || "scheduled"},
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ${id} AND user_id = ${userId}
-      RETURNING *
-    `
+    const isStatusOnlyUpdate =
+      status &&
+      !tipo_consulta &&
+      !nome_medico &&
+      !especialidade &&
+      !data_consulta &&
+      !horario_consulta &&
+      !local_consulta
+
+    let result
+
+    if (isStatusOnlyUpdate) {
+      result = await sql`
+        UPDATE appointments 
+        SET 
+          status = ${status},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *
+      `
+    } else {
+      result = await sql`
+        UPDATE appointments 
+        SET 
+          tipo_consulta = ${tipo_consulta},
+          nome_medico = ${nome_medico},
+          especialidade = ${especialidade},
+          data_consulta = ${data_consulta},
+          horario_consulta = ${horario_consulta},
+          local_consulta = ${local_consulta},
+          observacoes = ${observacoes || ""},
+          status = ${status || "scheduled"},
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *
+      `
+    }
 
     if (result.length === 0) {
       return NextResponse.json({ error: "Appointment not found" }, { status: 404 })

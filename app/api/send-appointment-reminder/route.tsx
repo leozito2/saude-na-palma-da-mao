@@ -48,9 +48,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Dados incompletos" }, { status: 400 })
     }
 
-    const reminderType = hoursBefore === 24 ? "primeiro" : "segundo"
-    const timeLeft = hoursBefore === 24 ? "24 horas" : "12 horas"
-
     const sender = await getVerifiedSender()
     console.log("[v0] Using sender for appointment reminder:", sender)
 
@@ -62,6 +59,8 @@ export async function POST(request: Request) {
         day: "numeric",
       })
     }
+
+    const timeLeft = "1 hora"
 
     const response = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -98,12 +97,12 @@ export async function POST(request: Request) {
                   </div>
                   
                   <p style="color: #4b5563; line-height: 1.6; margin: 0 0 20px 0;">
-                    Olá! Este é o seu <strong>${reminderType} lembrete</strong> sobre sua consulta agendada.
+                    Olá! Sua consulta está se aproximando. Não se esqueça de comparecer!
                   </p>
                   
                   <div style="background: linear-gradient(135deg, #eff6ff 0%, #d1fae5 100%); border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin: 0 0 20px 0;">
                     <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>📋 Tipo:</strong> ${tipo_consulta}</p>
-                    <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>👨‍⚕️ Médico:</strong> Dr. ${nome_medico}</p>
+                    <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>👨‍⚕️ Médico:</strong> ${nome_medico}</p>
                     <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>🏥 Especialidade:</strong> ${especialidade}</p>
                     <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>📅 Data:</strong> ${formatDate(data_consulta)}</p>
                     <p style="margin: 0 0 10px 0; color: #1f2937;"><strong>🕐 Horário:</strong> ${horario_consulta}</p>
@@ -111,7 +110,7 @@ export async function POST(request: Request) {
                   </div>
                   
                   <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px 30px; border-radius: 25px; text-align: center; font-weight: bold; font-size: 18px; margin: 0 0 30px 0;">
-                    ⏰ Faltam ${timeLeft}
+                    ⏰ Falta ${timeLeft}
                   </div>
                   
                   <div style="background: #dbeafe; border-left: 4px solid #3b82f6; padding: 16px; border-radius: 8px; margin: 0 0 20px 0;">

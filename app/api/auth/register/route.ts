@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+import bcrypt from "bcryptjs"
 
 export async function POST(request: Request) {
   try {
@@ -26,10 +27,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Usuário já existe com este email ou CPF" }, { status: 409 })
     }
 
-    // Insert new user (storing password as plain text for now - in production use bcrypt)
+    const hashedPassword = await bcrypt.hash(password, 10)
+
+    // Insert new user with hashed password
     const result = await sql`
       INSERT INTO users (nome_completo, email, password, cpf, sexo, endereco_completo, data_nascimento, telefone, created_at, updated_at)
-      VALUES (${nome_completo}, ${email}, ${password}, ${cpf}, ${sexo}, ${endereco_completo}, ${data_nascimento}, ${telefone || null}, NOW(), NOW())
+      VALUES (${nome_completo}, ${email}, ${hashedPassword}, ${cpf}, ${sexo}, ${endereco_completo}, ${data_nascimento}, ${telefone || null}, NOW(), NOW())
       RETURNING id, nome_completo, email, cpf, sexo, endereco_completo, data_nascimento, telefone, created_at
     `
 

@@ -39,8 +39,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Dados incompletos" }, { status: 400 })
     }
 
-    const reminderType = minutesBefore === 10 ? "primeiro" : "segundo"
-    const timeLeft = minutesBefore === 10 ? "10 minutos" : "5 minutos"
+    const reminderType = minutesBefore === 15 ? "primeiro" : "segundo"
+    const timeLeft = minutesBefore === 15 ? "15 minutos" : "5 minutos"
 
     const sender = await getVerifiedSender()
     console.log("[v0] Using sender for medication reminder:", sender)
