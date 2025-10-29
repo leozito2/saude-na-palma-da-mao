@@ -81,6 +81,7 @@ export const updateAppointment = async (
     horario_consulta?: string
     local_consulta?: string
     observacoes?: string
+    status?: string // Add status field
   },
 ): Promise<{ success: boolean; error?: string; appointment?: any }> => {
   try {
@@ -89,21 +90,31 @@ export const updateAppointment = async (
       return { success: false, error: "User not logged in" }
     }
 
+    const user = JSON.parse(currentUser)
+
+    console.log("[v0] Updating appointment:", id, appointmentData)
+
     const response = await fetch(`/api/appointments?id=${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(appointmentData),
+      body: JSON.stringify({
+        id: id, // Include id in request body
+        userId: user.id, // Include userId in request body
+        ...appointmentData,
+      }),
     })
 
     const data = await response.json()
 
     if (!response.ok) {
+      console.error("[v0] Error response:", data)
       return { success: false, error: data.error }
     }
 
+    console.log("[v0] Update successful:", data)
     return { success: true, appointment: data.appointment }
   } catch (error) {
-    console.error("Error updating appointment:", error)
+    console.error("[v0] Error updating appointment:", error)
     return { success: false, error: "Failed to update appointment" }
   }
 }

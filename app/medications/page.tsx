@@ -8,17 +8,33 @@ import { useRouter } from "next/navigation"
 import { ArrowLeft, Heart, Plus, Pill, Tablets, Check, AlertTriangle, History } from "lucide-react"
 import { getMedications, createMedication, moveMedicationToHistory, getMedicationHistory } from "@/lib/medications"
 
+interface MedicationIntake {
+  id: number
+  medication_id: number
+  user_id: number
+  taken_at: string
+  created_at: string
+}
+
+interface MedicationWithIntakes {
+  id: string
+  intakesToday: number
+  lastIntakeTime: Date | null
+  canTakeNow: boolean
+  remainingToday: number
+}
+
 export default function MedicationsPage() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [medications, setMedications] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [medicationIntakes, setMedicationIntakes] = useState<Map<string, MedicationWithIntakes>>(new Map())
   const [formData, setFormData] = useState({
     nome: "",
-    principio_ativo: "",
     tipo: "",
     dose: "",
     horario_uso: "",
@@ -37,15 +53,54 @@ export default function MedicationsPage() {
     loadMedications()
   }, [isAuthenticated, router])
 
+  const loadIntakesForMedications = async (meds: any[]) => {
+    if (!user?.id) return
+
+    const intakesMap = new Map<string, MedicationWithIntakes>()
+
+    for (const med of meds) {
+      try {
+        const response = await fetch(`/api/medications/intake?medicationId=${med.id}&userId=${user.id}`)
+        const data = await response.json()
+
+        const intakes: MedicationIntake[] = data.intakes || []
+        const intakesToday = intakes.length
+        const lastIntake = intakes.length > 0 ? new Date(intakes[0].taken_at) : null
+
+        // Check if can take now (1 hour after last intake)
+        let canTakeNow = true
+        if (lastIntake) {
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+          canTakeNow = lastIntake < oneHourAgo
+        }
+
+        const remainingToday = Math.max(0, (med.frequencia_diaria || 1) - intakesToday)
+
+        intakesMap.set(med.id.toString(), {
+          id: med.id,
+          intakesToday,
+          lastIntakeTime: lastIntake,
+          canTakeNow,
+          remainingToday,
+        })
+      } catch (error) {
+        console.error("[v0] Error loading intakes for medication:", med.id, error)
+      }
+    }
+
+    setMedicationIntakes(intakesMap)
+  }
+
   const loadMedications = async () => {
     try {
       setLoading(true)
       const loadedMedications = await getMedications()
       const loadedHistory = await getMedicationHistory()
 
-      // Ensure we always have arrays
       setMedications(Array.isArray(loadedMedications) ? loadedMedications : [])
       setHistory(Array.isArray(loadedHistory) ? loadedHistory : [])
+
+      await loadIntakesForMedications(Array.isArray(loadedMedications) ? loadedMedications : [])
 
       console.log("[v0] Loaded medications:", loadedMedications)
       console.log("[v0] Loaded history:", loadedHistory)
@@ -66,9 +121,12 @@ export default function MedicationsPage() {
     }))
 
     if (name === "data_vencimento") {
-      const today = new Date()
+      const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+      const today = new Date(brasilNow)
       today.setHours(0, 0, 0, 0)
-      const expiryDate = new Date(value)
+
+      const [year, month, day] = value.split("-")
+      const expiryDate = new Date(Number(year), Number(month) - 1, Number(day))
       expiryDate.setHours(0, 0, 0, 0)
 
       if (expiryDate.getTime() === today.getTime()) {
@@ -80,26 +138,37 @@ export default function MedicationsPage() {
   }
 
   const handleEdit = (medication: any) => {
+    console.log("[v0] Editing medication:", medication)
     setEditingId(medication.id)
+
+    const dateStr = medication.data_vencimento.split("T")[0]
+
     setFormData({
       nome: medication.nome,
-      principio_ativo: medication.principio_ativo,
       tipo: medication.tipo,
       dose: medication.dose,
       horario_uso: medication.horario_uso,
-      data_vencimento: medication.data_vencimento,
-      duracao_dias: medication.duracao_dias || "",
-      frequencia_diaria: medication.frequencia_diaria || "1",
+      data_vencimento: dateStr,
+      duracao_dias: medication.duracao_dias?.toString() || "",
+      frequencia_diaria: medication.frequencia_diaria?.toString() || "1",
     })
     setShowForm(true)
   }
 
   const handleCancelMedication = async (medicationId: string) => {
     if (confirm("Tem certeza que deseja cancelar este medicamento?")) {
-      const medications = await getMedications()
-      const filtered = medications.filter((med: any) => med.id !== medicationId)
-      localStorage.setItem("medications", JSON.stringify(filtered))
-      await loadMedications()
+      try {
+        console.log("[v0] Cancelling medication:", medicationId)
+        const success = await moveMedicationToHistory(medicationId, "cancelado")
+        if (success) {
+          await loadMedications()
+        } else {
+          setError("Erro ao cancelar medicamento. Tente novamente.")
+        }
+      } catch (error) {
+        console.error("[v0] Error cancelling medication:", error)
+        setError("Erro ao cancelar medicamento. Tente novamente.")
+      }
     }
   }
 
@@ -107,10 +176,17 @@ export default function MedicationsPage() {
     e.preventDefault()
     setError("")
 
-    const today = new Date()
+    const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+    const today = new Date(brasilNow)
     today.setHours(0, 0, 0, 0)
-    const expiryDate = new Date(formData.data_vencimento)
+
+    const [year, month, day] = formData.data_vencimento.split("-")
+    const expiryDate = new Date(Number(year), Number(month) - 1, Number(day))
     expiryDate.setHours(0, 0, 0, 0)
+
+    console.log("[v0] Brasil Now:", brasilNow)
+    console.log("[v0] Today:", today)
+    console.log("[v0] Expiry Date:", expiryDate)
 
     if (expiryDate < today) {
       setError("Não é possível cadastrar medicamentos com data de vencimento passada.")
@@ -118,12 +194,11 @@ export default function MedicationsPage() {
     }
 
     if (expiryDate.getTime() === today.getTime()) {
-      const now = new Date()
       const [hours, minutes] = formData.horario_uso.split(":")
-      const medicationTime = new Date()
+      const medicationTime = new Date(brasilNow)
       medicationTime.setHours(Number.parseInt(hours), Number.parseInt(minutes), 0, 0)
 
-      if (medicationTime <= now) {
+      if (medicationTime <= brasilNow) {
         setError("O horário de uso não pode ser menor que a hora atual.")
         return
       }
@@ -131,12 +206,20 @@ export default function MedicationsPage() {
 
     try {
       if (editingId) {
-        const medications = await getMedications()
-        const index = medications.findIndex((med: any) => med.id === editingId)
-        if (index !== -1) {
-          medications[index] = { ...medications[index], ...formData }
-          localStorage.setItem("medications", JSON.stringify(medications))
+        const response = await fetch("/api/medications", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingId,
+            userId: user?.id,
+            ...formData,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to update medication")
         }
+
         setEditingId(null)
       } else {
         await createMedication(formData)
@@ -161,7 +244,6 @@ export default function MedicationsPage() {
 
       setFormData({
         nome: "",
-        principio_ativo: "",
         tipo: "",
         dose: "",
         horario_uso: "",
@@ -177,31 +259,56 @@ export default function MedicationsPage() {
     }
   }
 
-  const handleConfirmarTomada = async (medicamentoId: string) => {
-    const medications = await getMedications()
-    const med = medications.find((m: any) => m.id === medicamentoId)
+  const handleConfirmarTomada = async (medicationId: string) => {
+    if (!user?.id) return
 
-    if (med && med.duracao_dias) {
-      const dataInicio = new Date(med.createdAt || med.data_vencimento)
-      const diasDecorridos = Math.floor((Date.now() - dataInicio.getTime()) / (1000 * 60 * 60 * 24))
+    try {
+      console.log("[v0] Recording intake for medication:", medicationId)
 
-      if (diasDecorridos < Number.parseInt(med.duracao_dias)) {
-        alert(
-          `Medicamento confirmado! Ainda faltam ${Number.parseInt(med.duracao_dias) - diasDecorridos} dias de tratamento.`,
-        )
-        return
+      // Record the intake
+      const response = await fetch("/api/medications/intake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          medicationId,
+          userId: user.id,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to record intake")
       }
-    }
 
-    const success = await moveMedicationToHistory(medicamentoId, "tomado")
-    if (success) {
+      // Reload medications to update intake counts
       await loadMedications()
+
+      // Get updated intake info
+      const intakeInfo = medicationIntakes.get(medicationId.toString())
+      if (intakeInfo) {
+        const remaining = intakeInfo.remainingToday - 1
+        if (remaining > 0) {
+          alert(
+            `Tomada registrada! Falta tomar esse medicamento ${remaining} ${remaining === 1 ? "vez" : "vezes"} hoje!`,
+          )
+        } else {
+          alert("Tomada registrada! Você completou todas as doses de hoje!")
+        }
+      }
+    } catch (error) {
+      console.error("[v0] Error recording intake:", error)
+      alert("Erro ao registrar tomada. Tente novamente.")
     }
   }
 
   const diasParaVencimento = (dataVencimento: string) => {
-    const hoje = new Date()
-    const vencimento = new Date(dataVencimento)
+    const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+    const hoje = new Date(brasilNow)
+    hoje.setHours(0, 0, 0, 0)
+
+    const [year, month, day] = dataVencimento.split("T")[0].split("-")
+    const vencimento = new Date(Number(year), Number(month) - 1, Number(day))
+    vencimento.setHours(0, 0, 0, 0)
+
     const diffTime = vencimento.getTime() - hoje.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return diffDays
@@ -296,19 +403,6 @@ export default function MedicationsPage() {
                     required
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Ex: Paracetamol"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Princípio Ativo *</label>
-                  <input
-                    type="text"
-                    name="principio_ativo"
-                    value={formData.principio_ativo}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Acetaminofeno"
                   />
                 </div>
 
@@ -429,7 +523,6 @@ export default function MedicationsPage() {
                     setEditingId(null)
                     setFormData({
                       nome: "",
-                      principio_ativo: "",
                       tipo: "",
                       dose: "",
                       horario_uso: "",
@@ -464,6 +557,9 @@ export default function MedicationsPage() {
                 {medications.map((medicamento) => {
                   const diasVencimento = diasParaVencimento(medicamento.data_vencimento)
                   const vencido = isVencido(medicamento.data_vencimento)
+                  const intakeInfo = medicationIntakes.get(medicamento.id.toString())
+                  const canTake = intakeInfo?.canTakeNow ?? true
+                  const remaining = intakeInfo?.remainingToday ?? medicamento.frequencia_diaria
 
                   return (
                     <div
@@ -491,7 +587,7 @@ export default function MedicationsPage() {
                           </div>
                           <div>
                             <h4 className="text-lg font-semibold text-gray-900">{medicamento.nome}</h4>
-                            <p className="text-gray-600">{medicamento.principio_ativo}</p>
+                            <p className="text-sm text-gray-600">{medicamento.tipo}</p>
                           </div>
                         </div>
 
@@ -508,11 +604,21 @@ export default function MedicationsPage() {
                         ) : null}
                       </div>
 
-                      <div className="space-y-3 mb-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">Tipo:</span>
-                          <span className="text-sm text-gray-600">{medicamento.tipo}</span>
+                      {!vencido && remaining > 0 && (
+                        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-sm font-medium text-blue-800">
+                            Falta tomar esse medicamento {remaining} {remaining === 1 ? "vez" : "vezes"} hoje!
+                          </p>
                         </div>
+                      )}
+
+                      {!vencido && remaining === 0 && (
+                        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm font-medium text-green-800">✓ Todas as doses de hoje foram tomadas!</p>
+                        </div>
+                      )}
+
+                      <div className="space-y-3 mb-4">
                         <div className="flex items-center justify-between">
                           <span className="text-sm font-medium text-gray-700">Dose:</span>
                           <span className="text-sm text-gray-600">{medicamento.dose}</span>
@@ -556,15 +662,21 @@ export default function MedicationsPage() {
 
                       <button
                         onClick={() => handleConfirmarTomada(medicamento.id)}
-                        disabled={vencido}
+                        disabled={vencido || !canTake}
                         className={`w-full flex items-center justify-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
-                          vencido
+                          vencido || !canTake
                             ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                             : "bg-green-600 text-white hover:bg-green-700"
                         }`}
                       >
                         <Check className="w-4 h-4" />
-                        <span>{vencido ? "Medicamento Vencido" : "Confirmar Tomada"}</span>
+                        <span>
+                          {vencido
+                            ? "Medicamento Vencido"
+                            : !canTake
+                              ? "Aguarde 1 hora para próxima dose"
+                              : "Confirmar Tomada"}
+                        </span>
                       </button>
                     </div>
                   )
@@ -590,7 +702,7 @@ export default function MedicationsPage() {
                   <thead>
                     <tr className="border-b border-gray-200">
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Medicamento</th>
-                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Princípio Ativo</th>
+                      <th className="text-left py-3 px-4 font-semibold text-gray-700">Tipo</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Dose</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Horário</th>
                       <th className="text-left py-3 px-4 font-semibold text-gray-700">Data/Hora</th>
@@ -601,17 +713,25 @@ export default function MedicationsPage() {
                     {history.map((item) => (
                       <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
                         <td className="py-3 px-4 font-medium text-gray-900">{item.nome}</td>
-                        <td className="py-3 px-4 text-gray-600">{item.principio_ativo}</td>
+                        <td className="py-3 px-4 text-gray-600">{item.tipo}</td>
                         <td className="py-3 px-4 text-gray-600">{item.dose}</td>
                         <td className="py-3 px-4 text-gray-600">{item.horario_uso}</td>
-                        <td className="py-3 px-4 text-gray-600">{formatDateTime(item.movidoParaHistoricoEm)}</td>
+                        <td className="py-3 px-4 text-gray-600">{formatDateTime(item.movido_para_historico_em)}</td>
                         <td className="py-3 px-4">
                           <span
                             className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              item.motivo === "tomado" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                              item.motivo === "completado"
+                                ? "bg-green-100 text-green-700"
+                                : item.motivo === "vencido"
+                                  ? "bg-yellow-100 text-yellow-700"
+                                  : "bg-red-100 text-red-700"
                             }`}
                           >
-                            {item.motivo === "tomado" ? "Tomado" : "Vencido"}
+                            {item.motivo === "completado"
+                              ? "Completado"
+                              : item.motivo === "vencido"
+                                ? "Vencido"
+                                : "Cancelado"}
                           </span>
                         </td>
                       </tr>

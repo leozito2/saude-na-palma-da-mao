@@ -5,8 +5,8 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Heart, Plus, Calendar, User, MapPin, Search } from "lucide-react"
-import { getAppointments, createAppointment, updateAppointment, deleteAppointment } from "@/lib/appointments"
+import { ArrowLeft, Heart, Plus, Calendar, User, MapPin, Search, History } from "lucide-react"
+import { getAppointments, createAppointment, updateAppointment } from "@/lib/appointments"
 
 export default function AppointmentsPage() {
   const { isAuthenticated } = useAuth()
@@ -38,9 +38,9 @@ export default function AppointmentsPage() {
   const loadAppointments = async () => {
     try {
       setLoading(true)
+      console.log("[v0] Loading appointments...")
       const loadedAppointments = await getAppointments()
       console.log("[v0] Loaded appointments:", loadedAppointments)
-      // Ensure appointments is always an array
       setAppointments(Array.isArray(loadedAppointments) ? loadedAppointments : [])
     } catch (error) {
       console.error("[v0] Error loading appointments:", error)
@@ -59,12 +59,16 @@ export default function AppointmentsPage() {
   }
 
   const handleEdit = (appointment: any) => {
+    console.log("[v0] Editing appointment:", appointment)
     setEditingId(appointment.id)
+
+    const dateStr = appointment.data_consulta.split("T")[0]
+
     setFormData({
       tipo_consulta: appointment.tipo_consulta,
       nome_medico: appointment.nome_medico,
       especialidade: appointment.especialidade,
-      data_consulta: appointment.data_consulta,
+      data_consulta: dateStr,
       horario_consulta: appointment.horario_consulta,
       local_consulta: appointment.local_consulta,
       observacoes: appointment.observacoes || "",
@@ -75,10 +79,11 @@ export default function AppointmentsPage() {
   const handleCancel = async (appointmentId: string) => {
     if (confirm("Tem certeza que deseja cancelar esta consulta?")) {
       try {
-        await deleteAppointment(appointmentId)
+        console.log("[v0] Cancelling appointment:", appointmentId)
+        await updateAppointment(appointmentId, { status: "cancelled" })
         await loadAppointments()
       } catch (error) {
-        console.error("[v0] Error canceling appointment:", error)
+        console.error("[v0] Error cancelling appointment:", error)
         setError("Erro ao cancelar consulta. Tente novamente.")
       }
     }
@@ -88,24 +93,30 @@ export default function AppointmentsPage() {
     e.preventDefault()
     setError("")
 
-    const now = new Date()
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+    const brasilToday = new Date(brasilNow)
+    brasilToday.setHours(0, 0, 0, 0)
 
-    const appointmentDate = new Date(formData.data_consulta)
+    const [year, month, day] = formData.data_consulta.split("-")
+    const appointmentDate = new Date(Number(year), Number(month) - 1, Number(day))
     appointmentDate.setHours(0, 0, 0, 0)
 
-    const appointmentDateTime = new Date(formData.data_consulta)
     const [hours, minutes] = formData.horario_consulta.split(":")
-    appointmentDateTime.setHours(Number.parseInt(hours), Number.parseInt(minutes))
+    const appointmentDateTime = new Date(appointmentDate)
+    appointmentDateTime.setHours(Number.parseInt(hours), Number.parseInt(minutes), 0, 0)
 
-    if (appointmentDate < today) {
+    console.log("[v0] Brasil Now:", brasilNow.toISOString())
+    console.log("[v0] Brasil Today:", brasilToday.toISOString())
+    console.log("[v0] Appointment Date:", appointmentDate.toISOString())
+    console.log("[v0] Appointment DateTime:", appointmentDateTime.toISOString())
+
+    if (appointmentDate < brasilToday) {
       setError("Não é possível agendar consultas em datas passadas.")
       return
     }
 
-    if (appointmentDate.getTime() === today.getTime()) {
-      const minTime = new Date(now.getTime() + 30 * 60 * 1000)
+    if (appointmentDate.getTime() === brasilToday.getTime()) {
+      const minTime = new Date(brasilNow.getTime() + 30 * 60 * 1000)
       if (appointmentDateTime < minTime) {
         setError("Consultas para hoje devem ser agendadas com pelo menos 30 minutos de antecedência.")
         return
@@ -114,9 +125,11 @@ export default function AppointmentsPage() {
 
     try {
       if (editingId) {
+        console.log("[v0] Updating appointment:", editingId, formData)
         await updateAppointment(editingId, formData)
         setEditingId(null)
       } else {
+        console.log("[v0] Creating appointment:", formData)
         await createAppointment(formData)
 
         try {
@@ -149,11 +162,34 @@ export default function AppointmentsPage() {
       setShowForm(false)
       await loadAppointments()
     } catch (error) {
+      console.error("[v0] Error submitting appointment:", error)
       setError("Erro ao agendar consulta. Tente novamente.")
     }
   }
 
-  const filteredAppointments = appointments.filter(
+  const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+  const brasilToday = new Date(brasilNow)
+  brasilToday.setHours(0, 0, 0, 0)
+
+  const activeAppointments = appointments.filter((appointment) => {
+    if (appointment.status === "cancelled") return false
+
+    const appointmentDate = new Date(appointment.data_consulta)
+    appointmentDate.setHours(0, 0, 0, 0)
+
+    return appointmentDate >= brasilToday
+  })
+
+  const historyAppointments = appointments.filter((appointment) => {
+    if (appointment.status === "cancelled") return true
+
+    const appointmentDate = new Date(appointment.data_consulta)
+    appointmentDate.setHours(0, 0, 0, 0)
+
+    return appointmentDate < brasilToday
+  })
+
+  const filteredActiveAppointments = activeAppointments.filter(
     (appointment) =>
       appointment.nome_medico?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       appointment.especialidade?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -162,6 +198,10 @@ export default function AppointmentsPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("pt-BR")
+  }
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString("pt-BR")
   }
 
   if (!isAuthenticated) {
@@ -244,7 +284,7 @@ export default function AppointmentsPage() {
                     onChange={handleInputChange}
                     required
                     className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Ex: Dr. João Silva"
+                    placeholder="Ex: João Silva"
                   />
                 </div>
 
@@ -359,7 +399,7 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 mb-8">
           <div className="p-6 border-b border-gray-100">
             <h3 className="text-lg font-semibold text-gray-900">Consultas Agendadas</h3>
           </div>
@@ -370,7 +410,7 @@ export default function AppointmentsPage() {
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
                 <p className="text-gray-600">Carregando consultas...</p>
               </div>
-            ) : filteredAppointments.length === 0 ? (
+            ) : filteredActiveAppointments.length === 0 ? (
               <div className="text-center py-8">
                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600">
@@ -379,7 +419,7 @@ export default function AppointmentsPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredAppointments.map((appointment) => (
+                {filteredActiveAppointments.map((appointment) => (
                   <div
                     key={appointment.id}
                     className="border border-gray-200 rounded-xl p-6 hover:shadow-lg transition-shadow"
@@ -404,7 +444,7 @@ export default function AppointmentsPage() {
                     <div className="grid md:grid-cols-2 gap-4 mb-4">
                       <div className="flex items-center space-x-2">
                         <User className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">Dr. {appointment.nome_medico}</span>
+                        <span className="text-sm text-gray-600">{appointment.nome_medico}</span>
                       </div>
                       <div className="flex items-center space-x-2">
                         <MapPin className="w-4 h-4 text-gray-400" />
@@ -438,6 +478,70 @@ export default function AppointmentsPage() {
             )}
           </div>
         </div>
+
+        {historyAppointments.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100">
+            <div className="p-6 border-b border-gray-100">
+              <div className="flex items-center space-x-2">
+                <History className="w-5 h-5 text-gray-700" />
+                <h3 className="text-lg font-semibold text-gray-900">Histórico de Consultas</h3>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="space-y-4">
+                {historyAppointments.map((appointment) => (
+                  <div key={appointment.id} className="border border-gray-200 rounded-xl p-6 bg-gray-50">
+                    <div className="flex items-start justify-between mb-4">
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className={`w-12 h-12 rounded-lg flex items-center justify-center ${
+                            appointment.status === "cancelled" ? "bg-red-500" : "bg-gray-500"
+                          }`}
+                        >
+                          <Calendar className="w-6 h-6 text-white" />
+                        </div>
+                        <div>
+                          <h4 className="text-lg font-semibold text-gray-900">{appointment.tipo_consulta}</h4>
+                          <p className="text-gray-600">{appointment.especialidade}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">{formatDate(appointment.data_consulta)}</p>
+                        <p className="text-sm text-gray-600">{appointment.horario_consulta}</p>
+                        <span
+                          className={`inline-block mt-1 px-2 py-1 rounded-full text-xs font-medium ${
+                            appointment.status === "cancelled" ? "bg-red-100 text-red-700" : "bg-gray-200 text-gray-700"
+                          }`}
+                        >
+                          {appointment.status === "cancelled" ? "Cancelada" : "Realizada"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="flex items-center space-x-2">
+                        <User className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{appointment.nome_medico}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <MapPin className="w-4 h-4 text-gray-400" />
+                        <span className="text-sm text-gray-600">{appointment.local_consulta}</span>
+                      </div>
+                    </div>
+
+                    {appointment.observacoes && (
+                      <div className="bg-white rounded-lg p-3 mt-4">
+                        <p className="text-sm text-gray-700">{appointment.observacoes}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

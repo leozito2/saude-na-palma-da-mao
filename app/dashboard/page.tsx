@@ -72,7 +72,8 @@ export default function DashboardPage() {
   }
 
   const getProximasConsultas = () => {
-    const today = new Date()
+    const brasilNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }))
+    const today = new Date(brasilNow)
     today.setHours(0, 0, 0, 0)
 
     console.log("[v0] Total appointments:", appointments.length)
@@ -181,7 +182,7 @@ export default function DashboardPage() {
                 <div key={consulta.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-xl">
                   <div>
                     <p className="font-medium text-gray-900">{consulta.tipo_consulta}</p>
-                    <p className="text-sm text-gray-600">Dr. {consulta.nome_medico}</p>
+                    <p className="text-sm text-gray-600">{consulta.nome_medico}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium">{formatDate(consulta.data_consulta)}</p>

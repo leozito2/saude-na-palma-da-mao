@@ -5,22 +5,29 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Heart, User, Save } from "lucide-react"
+import { ArrowLeft, Heart, User, Save, Loader2 } from "lucide-react"
+import { formatCPF, formatCEP, formatPhone } from "@/lib/format-utils"
 
 export default function ProfilePage() {
-  const { isAuthenticated, user, updateUser } = useAuth()
+  const { isAuthenticated, user } = useAuth()
   const router = useRouter()
   const [formData, setFormData] = useState({
     nome_completo: "",
     email: "",
     telefone: "",
     data_nascimento: "",
-    endereco: "",
-    cidade: "",
-    estado: "",
-    cep: "",
+    cpf: "",
+    endereco_rua: "",
+    endereco_numero: "",
+    endereco_complemento: "",
+    endereco_bairro: "",
+    endereco_cidade: "",
+    endereco_estado: "",
+    endereco_cep: "",
   })
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingProfile, setLoadingProfile] = useState(true)
+  const [loadingCep, setLoadingCep] = useState(false)
   const [message, setMessage] = useState("")
 
   useEffect(() => {
@@ -29,26 +36,90 @@ export default function ProfilePage() {
       return
     }
 
-    if (user) {
-      setFormData({
-        nome_completo: user.nome_completo || "",
-        email: user.email || "",
-        telefone: user.telefone || "",
-        data_nascimento: user.data_nascimento || "",
-        endereco: user.endereco || "",
-        cidade: user.cidade || "",
-        estado: user.estado || "",
-        cep: user.cep || "",
-      })
+    loadUserProfile()
+  }, [isAuthenticated, router])
+
+  const loadUserProfile = async () => {
+    if (!user?.id) return
+
+    try {
+      setLoadingProfile(true)
+      console.log("[v0] Loading user profile from database")
+
+      const response = await fetch(`/api/user/profile?userId=${user.id}`)
+      const data = await response.json()
+
+      if (data.user) {
+        console.log("[v0] User profile loaded:", data.user)
+        setFormData({
+          nome_completo: data.user.nome_completo || "",
+          email: data.user.email || "",
+          telefone: formatPhone(data.user.telefone || ""),
+          data_nascimento: data.user.data_nascimento || "",
+          cpf: formatCPF(data.user.cpf || ""),
+          endereco_rua: data.user.endereco_rua || "",
+          endereco_numero: data.user.endereco_numero || "",
+          endereco_complemento: data.user.endereco_complemento || "",
+          endereco_bairro: data.user.endereco_bairro || "",
+          endereco_cidade: data.user.endereco_cidade || "",
+          endereco_estado: data.user.endereco_estado || "",
+          endereco_cep: formatCEP(data.user.endereco_cep || ""),
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Error loading user profile:", error)
+      setMessage("Erro ao carregar perfil. Tente novamente.")
+    } finally {
+      setLoadingProfile(false)
     }
-  }, [isAuthenticated, user, router])
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
+
+    let formattedValue = value
+
+    if (name === "telefone") {
+      formattedValue = formatPhone(value)
+    } else if (name === "endereco_cep") {
+      formattedValue = formatCEP(value)
+      if (formattedValue.replace(/\D/g, "").length === 8) {
+        fetchAddressByCep(formattedValue.replace(/\D/g, ""))
+      }
+    }
+
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: formattedValue,
     }))
+  }
+
+  const fetchAddressByCep = async (cep: string) => {
+    if (cep.length !== 8) return
+
+    setLoadingCep(true)
+    try {
+      console.log("[v0] Fetching address for CEP:", cep)
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await response.json()
+
+      if (!data.erro) {
+        console.log("[v0] Address fetched successfully:", data)
+        setFormData((prev) => ({
+          ...prev,
+          endereco_rua: data.logradouro || prev.endereco_rua,
+          endereco_bairro: data.bairro || prev.endereco_bairro,
+          endereco_cidade: data.localidade || prev.endereco_cidade,
+          endereco_estado: data.uf || prev.endereco_estado,
+        }))
+      } else {
+        console.log("[v0] CEP not found")
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching CEP:", error)
+    } finally {
+      setLoadingCep(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,9 +128,34 @@ export default function ProfilePage() {
     setMessage("")
 
     try {
-      await updateUser(formData)
-      setMessage("Perfil atualizado com sucesso!")
+      console.log("[v0] Updating user profile")
+
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user?.id,
+          nome_completo: formData.nome_completo,
+          email: formData.email,
+          telefone: formData.telefone.replace(/\D/g, ""),
+          endereco_rua: formData.endereco_rua,
+          endereco_numero: formData.endereco_numero,
+          endereco_complemento: formData.endereco_complemento,
+          endereco_bairro: formData.endereco_bairro,
+          endereco_cidade: formData.endereco_cidade,
+          endereco_estado: formData.endereco_estado,
+          endereco_cep: formData.endereco_cep.replace(/\D/g, ""),
+        }),
+      })
+
+      if (response.ok) {
+        console.log("[v0] Profile updated successfully")
+        setMessage("Perfil atualizado com sucesso!")
+      } else {
+        throw new Error("Failed to update profile")
+      }
     } catch (error) {
+      console.error("[v0] Error updating profile:", error)
       setMessage("Erro ao atualizar perfil. Tente novamente.")
     } finally {
       setIsLoading(false)
@@ -68,6 +164,17 @@ export default function ProfilePage() {
 
   if (!isAuthenticated || !user) {
     return null
+  }
+
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-16 h-16 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Carregando perfil...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -149,7 +256,20 @@ export default function ProfilePage() {
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="(11) 99999-9999"
+                  maxLength={15}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">CPF</label>
+                <input
+                  type="text"
+                  name="cpf"
+                  value={formData.cpf}
+                  disabled
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-100 cursor-not-allowed text-gray-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">O CPF não pode ser alterado</p>
               </div>
 
               <div>
@@ -158,20 +278,74 @@ export default function ProfilePage() {
                   type="date"
                   name="data_nascimento"
                   value={formData.data_nascimento}
+                  disabled
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 bg-gray-100 cursor-not-allowed text-gray-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">A data de nascimento não pode ser alterada</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="endereco_cep"
+                    value={formData.endereco_cep}
+                    onChange={handleInputChange}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="00000-000"
+                    maxLength={9}
+                  />
+                  {loadingCep && (
+                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">O endereço será preenchido automaticamente</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Rua</label>
+                <input
+                  type="text"
+                  name="endereco_rua"
+                  value={formData.endereco_rua}
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Endereço</label>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Número</label>
                 <input
                   type="text"
-                  name="endereco"
-                  value={formData.endereco}
+                  name="endereco_numero"
+                  value={formData.endereco_numero}
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Rua, número, complemento"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Complemento</label>
+                <input
+                  type="text"
+                  name="endereco_complemento"
+                  value={formData.endereco_complemento}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bairro</label>
+                <input
+                  type="text"
+                  name="endereco_bairro"
+                  value={formData.endereco_bairro}
+                  onChange={handleInputChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
 
@@ -179,8 +353,8 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Cidade</label>
                 <input
                   type="text"
-                  name="cidade"
-                  value={formData.cidade}
+                  name="endereco_cidade"
+                  value={formData.endereco_cidade}
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -190,23 +364,12 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
                 <input
                   type="text"
-                  name="estado"
-                  value={formData.estado}
+                  name="endereco_estado"
+                  value={formData.endereco_estado}
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="SP"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">CEP</label>
-                <input
-                  type="text"
-                  name="cep"
-                  value={formData.cep}
-                  onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="00000-000"
+                  maxLength={2}
                 />
               </div>
             </div>
@@ -229,7 +392,7 @@ export default function ProfilePage() {
                 disabled={isLoading}
                 className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-green-600 text-white px-6 py-2 rounded-lg hover:shadow-lg transition-all disabled:opacity-50"
               >
-                <Save className="w-4 h-4" />
+                {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 <span>{isLoading ? "Salvando..." : "Salvar Alterações"}</span>
               </button>
 

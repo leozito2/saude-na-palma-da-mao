@@ -1,10 +1,10 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Loader2 } from "lucide-react"
+import { formatCPF, formatCEP, formatPhone } from "@/lib/format-utils"
 
 interface RegisterFormProps {
   onToggleMode: () => void
@@ -30,6 +30,7 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
+  const [loadingCep, setLoadingCep] = useState(false)
 
   const { register } = useAuth()
 
@@ -70,10 +71,45 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target
 
-    if (name === "cpf" && value.length > 14) return // 000.000.000-00 format
-    if (name === "telefone" && value.length > 15) return // (00) 00000-0000 format
+    let formattedValue = value
 
-    setFormData((prev) => ({ ...prev, [name]: value }))
+    if (name === "cpf") {
+      formattedValue = formatCPF(value)
+      if (formattedValue.replace(/\D/g, "").length > 11) return
+    } else if (name === "endereco_cep") {
+      formattedValue = formatCEP(value)
+      if (formattedValue.replace(/\D/g, "").length === 8) {
+        fetchAddressByCep(formattedValue.replace(/\D/g, ""))
+      }
+    } else if (name === "telefone") {
+      formattedValue = formatPhone(value)
+    }
+
+    setFormData((prev) => ({ ...prev, [name]: formattedValue }))
+  }
+
+  const fetchAddressByCep = async (cep: string) => {
+    if (cep.length !== 8) return
+
+    setLoadingCep(true)
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await response.json()
+
+      if (!data.erro) {
+        setFormData((prev) => ({
+          ...prev,
+          endereco_rua: data.logradouro || prev.endereco_rua,
+          endereco_bairro: data.bairro || prev.endereco_bairro,
+          endereco_cidade: data.localidade || prev.endereco_cidade,
+          endereco_estado: data.uf || prev.endereco_estado,
+        }))
+      }
+    } catch (error) {
+      console.error("[v0] Error fetching CEP:", error)
+    } finally {
+      setLoadingCep(false)
+    }
   }
 
   return (
@@ -263,15 +299,24 @@ export function RegisterForm({ onToggleMode }: RegisterFormProps) {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">CEP</label>
-              <input
-                type="text"
-                name="endereco_cep"
-                value={formData.endereco_cep}
-                onChange={handleInputChange}
-                placeholder="00000-000"
-                required
-                className="w-full border border-gray-200 px-4 py-3 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  name="endereco_cep"
+                  value={formData.endereco_cep}
+                  onChange={handleInputChange}
+                  placeholder="00000-000"
+                  required
+                  maxLength={9}
+                  className="w-full border border-gray-200 px-4 py-3 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
+                />
+                {loadingCep && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-gray-500">O endereço será preenchido automaticamente</p>
             </div>
           </div>
         </div>

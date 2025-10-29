@@ -67,19 +67,35 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { id, userId, ...updates } = body
+    const {
+      id,
+      userId,
+      tipo_consulta,
+      nome_medico,
+      especialidade,
+      data_consulta,
+      horario_consulta,
+      local_consulta,
+      observacoes,
+      status,
+    } = body
 
     if (!id || !userId) {
       return NextResponse.json({ error: "ID and User ID are required" }, { status: 400 })
     }
 
-    const updateFields = Object.keys(updates)
-      .map((key) => `${key} = $${key}`)
-      .join(", ")
-
     const result = await sql`
       UPDATE appointments 
-      SET ${sql(updates)}, updated_at = CURRENT_TIMESTAMP
+      SET 
+        tipo_consulta = ${tipo_consulta},
+        nome_medico = ${nome_medico},
+        especialidade = ${especialidade},
+        data_consulta = ${data_consulta},
+        horario_consulta = ${horario_consulta},
+        local_consulta = ${local_consulta},
+        observacoes = ${observacoes || ""},
+        status = ${status || "scheduled"},
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id} AND user_id = ${userId}
       RETURNING *
     `

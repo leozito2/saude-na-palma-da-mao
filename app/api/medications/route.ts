@@ -51,7 +51,18 @@ export async function POST(request: Request) {
 export async function PUT(request: Request) {
   try {
     const body = await request.json()
-    const { id, userId, ...updates } = body
+    const {
+      id,
+      userId,
+      nome,
+      principio_ativo,
+      tipo,
+      dose,
+      horario_uso,
+      data_vencimento,
+      duracao_dias,
+      frequencia_diaria,
+    } = body
 
     if (!id || !userId) {
       return NextResponse.json({ error: "ID and User ID are required" }, { status: 400 })
@@ -59,7 +70,16 @@ export async function PUT(request: Request) {
 
     const result = await sql`
       UPDATE medications 
-      SET ${sql(updates)}, updated_at = CURRENT_TIMESTAMP
+      SET 
+        nome = ${nome},
+        principio_ativo = ${principio_ativo || ""},
+        tipo = ${tipo},
+        dose = ${dose},
+        horario_uso = ${horario_uso},
+        data_vencimento = ${data_vencimento},
+        duracao_dias = ${duracao_dias || null},
+        frequencia_diaria = ${frequencia_diaria || 1},
+        updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id} AND user_id = ${userId}
       RETURNING *
     `
