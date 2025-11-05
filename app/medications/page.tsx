@@ -17,11 +17,12 @@ interface MedicationIntake {
 }
 
 interface MedicationWithIntakes {
-  id: string
+  id: number
   intakesToday: number
   lastIntakeTime: Date | null
   canTakeNow: boolean
   remainingToday: number
+  waitHours: number
 }
 
 export default function MedicationsPage() {
@@ -67,14 +68,17 @@ export default function MedicationsPage() {
         const intakesToday = intakes.length
         const lastIntake = intakes.length > 0 ? new Date(intakes[0].taken_at) : null
 
-        // Check if can take now (1 hour after last intake)
+        const frequencia = med.frequencia_diaria || 1
+        const waitHours = Math.round(24 / frequencia)
+
         let canTakeNow = true
         if (lastIntake) {
-          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
-          canTakeNow = lastIntake < oneHourAgo
+          const waitTimeMs = waitHours * 60 * 60 * 1000
+          const nextAllowedTime = new Date(lastIntake.getTime() + waitTimeMs)
+          canTakeNow = Date.now() >= nextAllowedTime.getTime()
         }
 
-        const remainingToday = Math.max(0, (med.frequencia_diaria || 1) - intakesToday)
+        const remainingToday = Math.max(0, frequencia - intakesToday)
 
         intakesMap.set(med.id.toString(), {
           id: med.id,
@@ -82,6 +86,7 @@ export default function MedicationsPage() {
           lastIntakeTime: lastIntake,
           canTakeNow,
           remainingToday,
+          waitHours,
         })
       } catch (error) {
         console.error("[v0] Error loading intakes for medication:", med.id, error)
@@ -265,7 +270,6 @@ export default function MedicationsPage() {
     try {
       console.log("[v0] Recording intake for medication:", medicationId)
 
-      // Record the intake
       const response = await fetch("/api/medications/intake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -279,10 +283,8 @@ export default function MedicationsPage() {
         throw new Error("Failed to record intake")
       }
 
-      // Reload medications to update intake counts
       await loadMedications()
 
-      // Get updated intake info
       const intakeInfo = medicationIntakes.get(medicationId.toString())
       if (intakeInfo) {
         const remaining = intakeInfo.remainingToday - 1
@@ -361,7 +363,7 @@ export default function MedicationsPage() {
                   <Heart className="w-6 h-6 text-white" />
                 </div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-500 bg-clip-text text-transparent">
-                  MedCare
+                  Saúde Na Palma da Mão
                 </h1>
               </div>
             </div>
@@ -560,6 +562,7 @@ export default function MedicationsPage() {
                   const intakeInfo = medicationIntakes.get(medicamento.id.toString())
                   const canTake = intakeInfo?.canTakeNow ?? true
                   const remaining = intakeInfo?.remainingToday ?? medicamento.frequencia_diaria
+                  const waitHours = intakeInfo?.waitHours ?? 24
 
                   return (
                     <div
@@ -674,7 +677,7 @@ export default function MedicationsPage() {
                           {vencido
                             ? "Medicamento Vencido"
                             : !canTake
-                              ? "Aguarde 1 hora para próxima dose"
+                              ? `Aguarde ${waitHours} ${waitHours === 1 ? "hora" : "horas"} para próxima dose`
                               : "Confirmar Tomada"}
                         </span>
                       </button>

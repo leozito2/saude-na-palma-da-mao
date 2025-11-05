@@ -15,7 +15,7 @@ async function getVerifiedSender() {
         const verifiedSender = data.senders.find((s: any) => s.active)
         if (verifiedSender) {
           return {
-            name: verifiedSender.name || "MedCare",
+            name: verifiedSender.name || "Saúde Na Palma da Mão",
             email: verifiedSender.email,
           }
         }
@@ -26,8 +26,8 @@ async function getVerifiedSender() {
   }
 
   return {
-    name: "MedCare",
-    email: "noreply@medcare.com",
+    name: "Saúde Na Palma da Mão",
+    email: "noreply@saudenapalmadamao.com",
   }
 }
 
@@ -52,7 +52,10 @@ export async function POST(request: Request) {
     console.log("[v0] Using sender for appointment reminder:", sender)
 
     const formatDate = (dateString: string) => {
-      return new Date(dateString).toLocaleDateString("pt-BR", {
+      const [year, month, day] = dateString.split("T")[0].split("-")
+      const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+
+      return date.toLocaleDateString("pt-BR", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -86,7 +89,7 @@ export async function POST(request: Request) {
             <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
               <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
                 <div style="background: linear-gradient(135deg, #3b82f6 0%, #10b981 100%); padding: 30px; border-radius: 16px 16px 0 0; text-align: center;">
-                  <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">🏥 MedCare</h1>
+                  <h1 style="color: white; margin: 0; font-size: 28px; font-weight: bold;">🏥 Saúde Na Palma da Mão</h1>
                   <p style="color: rgba(255, 255, 255, 0.9); margin: 10px 0 0 0; font-size: 16px;">Sistema de Gerenciamento de Saúde</p>
                 </div>
                 
@@ -120,13 +123,13 @@ export async function POST(request: Request) {
                   </div>
                   
                   <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 0;">
-                    Este é um lembrete automático do seu aplicativo MedCare. Para gerenciar suas consultas, acesse o aplicativo.
+                    Este é um lembrete automático do seu aplicativo Saúde Na Palma da Mão. Para gerenciar suas consultas, acesse o aplicativo.
                   </p>
                   
                   <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
                   
                   <p style="color: #9ca3af; font-size: 12px; text-align: center; margin: 0;">
-                    © 2025 MedCare - Cuidando da sua saúde<br>
+                    © 2025 Saúde Na Palma da Mão - Cuidando da sua saúde<br>
                     Este é um email automático, por favor não responda.
                   </p>
                 </div>

@@ -90,13 +90,20 @@ export default function DashboardPage() {
         aptDate.setHours(0, 0, 0, 0)
         const isFuture = aptDate >= today
         console.log("[v0] Appointment:", apt.data_consulta, "Is future:", isFuture)
-        return isFuture
+        return isFuture && apt.status === "scheduled"
       })
       .sort((a, b) => new Date(a.data_consulta).getTime() - new Date(b.data_consulta).getTime())
-      .slice(0, 2)
 
     console.log("[v0] Future appointments:", futureAppointments)
     return futureAppointments
+  }
+
+  const getProximasConsultasParaExibir = () => {
+    return getProximasConsultas().slice(0, 2)
+  }
+
+  const getTotalConsultasFuturas = () => {
+    return getProximasConsultas().length
   }
 
   const formatDate = (dateString: string) => {
@@ -104,7 +111,7 @@ export default function DashboardPage() {
   }
 
   const dashboardStats = {
-    proximasConsultas: getProximasConsultas().length,
+    proximasConsultas: getTotalConsultasFuturas(),
     medicamentosAtivos: medications.length,
   }
 
@@ -119,7 +126,7 @@ export default function DashboardPage() {
                 <Heart className="w-6 h-6 text-white" />
               </div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                MedCare
+                Saúde Na Palma da Mão
               </h1>
             </div>
 
@@ -174,11 +181,11 @@ export default function DashboardPage() {
         </div>
 
         {/* Quick Access to Today's Schedule */}
-        {getProximasConsultas().length > 0 && (
+        {getProximasConsultasParaExibir().length > 0 && (
           <div className="bg-white rounded-2xl p-6 shadow-lg border border-gray-100 mb-8">
             <h3 className="text-xl font-bold text-gray-900 mb-4">Próximas Consultas</h3>
             <div className="space-y-3">
-              {getProximasConsultas().map((consulta) => (
+              {getProximasConsultasParaExibir().map((consulta) => (
                 <div key={consulta.id} className="flex items-center justify-between p-4 bg-blue-50 rounded-xl">
                   <div>
                     <p className="font-medium text-gray-900">{consulta.tipo_consulta}</p>
@@ -277,7 +284,7 @@ export default function DashboardPage() {
         <div className="mt-12 bg-gradient-to-r from-blue-600 to-green-600 rounded-2xl p-8 text-white">
           <div className="text-center">
             <Heart className="w-12 h-12 text-white mx-auto mb-4" />
-            <h3 className="text-2xl font-bold mb-2">Sistema MedCare Completo</h3>
+            <h3 className="text-2xl font-bold mb-2">Sistema Saúde Na Palma da Mão Completo</h3>
             <p className="text-blue-100 mb-6">
               Todos os módulos estão funcionais! Gerencie suas consultas, controle seus medicamentos e mantenha sua
               saúde organizada.

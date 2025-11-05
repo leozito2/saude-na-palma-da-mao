@@ -36,7 +36,7 @@ export default function AuthPage() {
                 <Heart className="w-6 h-6 text-white" />
               </div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                MedCare
+                Saúde Na Palma da Mão
               </h1>
             </div>
           </div>
@@ -53,7 +53,7 @@ export default function AuthPage() {
             </h2>
             <p className="text-lg text-gray-600 max-w-md mx-auto">
               {mode === "login" && "Entre na sua conta para gerenciar sua saúde"}
-              {mode === "register" && "Junte-se ao MedCare e cuide melhor da sua saúde"}
+              {mode === "register" && "Junte-se ao Saúde Na Palma da Mão e cuide melhor da sua saúde"}
               {mode === "forgot-password" && "Digite seu email para recuperar o acesso"}
             </p>
           </div>
@@ -75,9 +75,9 @@ export default function AuthPage() {
               <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-green-500 rounded-lg flex items-center justify-center">
                 <Heart className="w-5 h-5 text-white" />
               </div>
-              <h3 className="text-xl font-bold">MedCare</h3>
+              <h3 className="text-xl font-bold">Saúde Na Palma da Mão</h3>
             </div>
-            <p className="text-gray-400">© 2025 MedCare. Cuidando da sua saúde com tecnologia.</p>
+            <p className="text-gray-400">© 2025 Saúde Na Palma da Mão. Cuidando da sua saúde com tecnologia.</p>
           </div>
         </div>
       </footer>

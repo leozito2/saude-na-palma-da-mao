@@ -15,7 +15,7 @@ async function getVerifiedSender() {
         const verifiedSender = data.senders.find((s: any) => s.active)
         if (verifiedSender) {
           return {
-            name: verifiedSender.name || "MedCare",
+            name: verifiedSender.name || "Saúde Na Palma da Mão",
             email: verifiedSender.email,
           }
         }
@@ -26,8 +26,8 @@ async function getVerifiedSender() {
   }
 
   return {
-    name: "MedCare",
-    email: "noreply@medcare.com",
+    name: "Saúde Na Palma da Mão",
+    email: "noreply@saudenapalmadamao.com",
   }
 }
 
@@ -43,7 +43,10 @@ export async function POST(request: NextRequest) {
     const sender = await getVerifiedSender()
 
     const formatDate = (dateString: string) => {
-      return new Date(dateString).toLocaleDateString("pt-BR", {
+      const [year, month, day] = dateString.split("T")[0].split("-")
+      const date = new Date(Number.parseInt(year), Number.parseInt(month) - 1, Number.parseInt(day))
+
+      return date.toLocaleDateString("pt-BR", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -59,8 +62,8 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         sender: sender,
-        to: [{ email: userEmail, name: "Usuário MedCare" }],
-        subject: "✅ Consulta Agendada com Sucesso - MedCare",
+        to: [{ email: userEmail, name: "Usuário Saúde Na Palma da Mão" }],
+        subject: "✅ Consulta Agendada com Sucesso - Saúde Na Palma da Mão",
         htmlContent: `
           <!DOCTYPE html>
           <html>
@@ -74,7 +77,7 @@ export async function POST(request: NextRequest) {
                   <div style="background: white; width: 60px; height: 60px; border-radius: 50%; margin: 0 auto 15px; display: inline-flex; align-items: center; justify-content: center;">
                     <span style="font-size: 30px;">🏥</span>
                   </div>
-                  <h1 style="color: white; margin: 0; font-size: 28px;">MedCare</h1>
+                  <h1 style="color: white; margin: 0; font-size: 28px;">Saúde Na Palma da Mão</h1>
                 </div>
                 
                 <div style="background: white; padding: 40px; border-radius: 0 0 20px 20px;">
@@ -92,7 +95,7 @@ export async function POST(request: NextRequest) {
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; color: #6B7280; font-size: 14px;">👨‍⚕️ Médico:</td>
-                        <td style="padding: 8px 0; color: #1F2937; font-weight: 600; text-align: right;">Dr. ${nome_medico}</td>
+                        <td style="padding: 8px 0; color: #1F2937; font-weight: 600; text-align: right;">${nome_medico}</td>
                       </tr>
                       <tr>
                         <td style="padding: 8px 0; color: #6B7280; font-size: 14px;">🏥 Especialidade:</td>
@@ -120,7 +123,7 @@ export async function POST(request: NextRequest) {
                   </div>
                   
                   <p style="color: #6B7280; font-size: 13px; text-align: center; margin: 20px 0 0 0;">
-                    © 2025 MedCare - Sistema de Gerenciamento de Saúde
+                    © 2025 Saúde Na Palma da Mão - Sistema de Gerenciamento de Saúde
                   </p>
                 </div>
               </div>

@@ -227,7 +227,7 @@ export default function AppointmentsPage() {
                   <Heart className="w-6 h-6 text-white" />
                 </div>
                 <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-green-600 bg-clip-text text-transparent">
-                  MedCare
+                  Saúde Na Palma da Mão
                 </h1>
               </div>
             </div>
