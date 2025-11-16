@@ -31,31 +31,52 @@ export default function ProfilePage() {
   const [message, setMessage] = useState("")
 
   useEffect(() => {
+    console.log("[v0] ProfilePage mounted, isAuthenticated:", isAuthenticated, "user:", user)
+
     if (!isAuthenticated) {
+      console.log("[v0] User not authenticated, redirecting to /auth")
       router.push("/auth")
       return
     }
 
+    if (!user?.id) {
+      console.log("[v0] User ID not available yet")
+      return
+    }
+
     loadUserProfile()
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, user, router])
 
   const loadUserProfile = async () => {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.log("[v0] Cannot load profile: user.id is undefined")
+      return
+    }
 
     try {
       setLoadingProfile(true)
-      console.log("[v0] Loading user profile from database")
+      console.log("[v0] Loading user profile from database for userId:", user.id)
 
       const response = await fetch(`/api/user/profile?userId=${user.id}`)
+      console.log("[v0] Profile API response status:", response.status)
+
       const data = await response.json()
+      console.log("[v0] Profile API response data:", data)
 
       if (data.user) {
-        console.log("[v0] User profile loaded:", data.user)
+        console.log("[v0] User profile loaded successfully:", data.user)
+
+        let formattedDate = ""
+        if (data.user.data_nascimento) {
+          const date = new Date(data.user.data_nascimento)
+          formattedDate = date.toISOString().split("T")[0]
+        }
+
         setFormData({
           nome_completo: data.user.nome_completo || "",
           email: data.user.email || "",
           telefone: formatPhone(data.user.telefone || ""),
-          data_nascimento: data.user.data_nascimento || "",
+          data_nascimento: formattedDate,
           cpf: formatCPF(data.user.cpf || ""),
           endereco_rua: data.user.endereco_rua || "",
           endereco_numero: data.user.endereco_numero || "",
@@ -65,6 +86,10 @@ export default function ProfilePage() {
           endereco_estado: data.user.endereco_estado || "",
           endereco_cep: formatCEP(data.user.endereco_cep || ""),
         })
+        console.log("[v0] Form data set successfully")
+      } else {
+        console.log("[v0] No user data in response")
+        setMessage("Erro ao carregar perfil. Dados não encontrados.")
       }
     } catch (error) {
       console.error("[v0] Error loading user profile:", error)
@@ -124,12 +149,21 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!user?.id) {
+      console.log("[v0] Cannot submit: user.id is undefined")
+      setMessage("❌ Erro: usuário não identificado. Faça login novamente.")
+      return
+    }
+
     setIsLoading(true)
     setMessage("")
 
     try {
-      console.log("[v0] Updating user profile for userId:", user?.id)
-      console.log("[v0] Form data being sent:", {
+      console.log("[v0] Updating user profile for userId:", user.id)
+
+      const updateData = {
+        userId: user.id,
         nome_completo: formData.nome_completo,
         email: formData.email,
         telefone: formData.telefone.replace(/\D/g, ""),
@@ -140,36 +174,30 @@ export default function ProfilePage() {
         endereco_cidade: formData.endereco_cidade,
         endereco_estado: formData.endereco_estado,
         endereco_cep: formData.endereco_cep.replace(/\D/g, ""),
-      })
+      }
+
+      console.log("[v0] Form data being sent:", updateData)
 
       const response = await fetch("/api/user/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user?.id,
-          nome_completo: formData.nome_completo,
-          email: formData.email,
-          telefone: formData.telefone.replace(/\D/g, ""),
-          endereco_rua: formData.endereco_rua,
-          endereco_numero: formData.endereco_numero,
-          endereco_complemento: formData.endereco_complemento,
-          endereco_bairro: formData.endereco_bairro,
-          endereco_cidade: formData.endereco_cidade,
-          endereco_estado: formData.endereco_estado,
-          endereco_cep: formData.endereco_cep.replace(/\D/g, ""),
-        }),
+        body: JSON.stringify(updateData),
       })
 
+      console.log("[v0] Update API response status:", response.status)
       const data = await response.json()
+      console.log("[v0] Update API response data:", data)
 
       if (response.ok) {
-        console.log("[v0] Profile updated successfully:", data)
+        console.log("[v0] Profile updated successfully")
         setMessage("✅ Perfil atualizado com sucesso!")
+
         setTimeout(() => {
+          console.log("[v0] Reloading profile after update")
           loadUserProfile()
         }, 1000)
       } else {
-        console.error("[v0] Error response:", data)
+        console.error("[v0] Error response from API:", data)
         throw new Error(data.error || "Failed to update profile")
       }
     } catch (error) {
@@ -181,6 +209,7 @@ export default function ProfilePage() {
   }
 
   if (!isAuthenticated || !user) {
+    console.log("[v0] Not rendering profile: not authenticated or no user")
     return null
   }
 

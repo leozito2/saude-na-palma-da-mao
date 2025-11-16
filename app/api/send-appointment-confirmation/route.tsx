@@ -5,7 +5,7 @@ async function getVerifiedSender() {
     const response = await fetch("https://api.brevo.com/v3/senders", {
       method: "GET",
       headers: {
-        "api-key": "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",
+        "api-key": process.env.BREVO_API_KEY || "",
       },
     })
 
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "api-key": "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",
+        "api-key": process.env.BREVO_API_KEY || "",
       },
       body: JSON.stringify({
         sender: sender,
